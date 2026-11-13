@@ -1,0 +1,6 @@
+{
+  "name": "STRIDE OS",
+  "description": "Program latihan lari dan badminton hybrid personal dengan Tas-Mode Audio Coach, kalkulasi zona detak jantung, dan pelacakan beban latihan.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

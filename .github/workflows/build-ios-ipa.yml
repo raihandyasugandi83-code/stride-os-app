@@ -1,0 +1,78 @@
+name: Build iOS IPA (Unsigned for Sideloadly / AltStore)
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  build-ipa:
+    name: Build Unsigned iOS .ipa
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build web bundle
+        run: npm run build
+
+      - name: Generate iOS Xcode project
+        run: |
+          if [ ! -d "ios" ]; then
+            npx cap add ios
+          fi
+          npx cap sync ios
+
+      - name: Configure App Icon & iOS Info.plist
+        run: |
+          ICON_DIR="ios/App/App/Assets.xcassets/AppIcon.appiconset"
+          if [ -f "public/ios-app-icon-1024.png" ] && [ -d "$ICON_DIR" ]; then
+            cp public/ios-app-icon-1024.png "$ICON_DIR/AppIcon-512@2x.png"
+          fi
+          PLIST="ios/App/App/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName STRIDE OS" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string STRIDE OS" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes array" "$PLIST" || true
+          /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes:0 string audio" "$PLIST" || true
+
+      - name: Archive unsigned iOS app
+        run: |
+          if [ -d "ios/App/App.xcworkspace" ]; then
+            BUILD_TARGET="-workspace ios/App/App.xcworkspace"
+          else
+            BUILD_TARGET="-project ios/App/App.xcodeproj"
+          fi
+          xcodebuild \
+            $BUILD_TARGET \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath "$PWD/build/App.xcarchive" \
+            archive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Package .ipa
+        run: |
+          mkdir -p build/Payload
+          cp -r build/App.xcarchive/Products/Applications/App.app build/Payload/
+          cd build
+          zip -r STRIDE-OS-unsigned.ipa Payload
+
+      - name: Upload STRIDE-OS-unsigned.ipa artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: STRIDE-OS-ipa
+          path: build/STRIDE-OS-unsigned.ipa
+          retention-days: 30
